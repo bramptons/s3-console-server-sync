@@ -1,0 +1,24 @@
+{
+  "Name": "DocumentsBackup",
+  "SourceFolder": "C:\\Users\\YourName\\Documents",
+  "Provider": "S3",
+  "BucketOrContainer": "my-backup-bucket",
+  "KeyPrefix": "documents",
+  "Region": "us-east-1",
+  "Credentials": {
+    "AccessKey": "YOUR_AWS_ACCESS_KEY",
+    "SecretKey": "YOUR_AWS_SECRET_KEY",
+    "ConnectionString": "",
+    "CustomEndpoint": ""
+  },
+  "DeleteRemovedFiles": false,
+  "StorageTier": "STANDARD",
+  "ExcludePatterns": [
+    "*.tmp",
+    "*.bak",
+    "Thumbs.db",
+    ".DS_Store",
+    "desktop.ini"
+  ],
+  "StateFilePath": ""
+}
