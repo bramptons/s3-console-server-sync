@@ -1,0 +1,22 @@
+{
+  "Name": "ServerBackupWasabi",
+  "SourceFolder": "D:\\ServerData",
+  "Provider": "Wasabi",
+  "BucketOrContainer": "my-wasabi-bucket",
+  "KeyPrefix": "server1",
+  "Region": "us-east-1",
+  "Credentials": {
+    "AccessKey": "YOUR_WASABI_ACCESS_KEY",
+    "SecretKey": "YOUR_WASABI_SECRET_KEY",
+    "ConnectionString": "",
+    "CustomEndpoint": ""
+  },
+  "DeleteRemovedFiles": true,
+  "StorageTier": "STANDARD",
+  "ExcludePatterns": [
+    "*.tmp",
+    "*.log",
+    "Thumbs.db"
+  ],
+  "StateFilePath": ""
+}

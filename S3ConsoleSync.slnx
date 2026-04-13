@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/S3ConsoleSync/S3ConsoleSync.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/S3ConsoleSync.Tests/S3ConsoleSync.Tests.csproj" />
+  </Folder>
+</Solution>

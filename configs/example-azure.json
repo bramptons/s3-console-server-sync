@@ -1,0 +1,22 @@
+{
+  "Name": "AzureBackup",
+  "SourceFolder": "C:\\ImportantFiles",
+  "Provider": "AzureBlob",
+  "BucketOrContainer": "my-backup-container",
+  "KeyPrefix": "",
+  "Region": "us-east-1",
+  "Credentials": {
+    "AccessKey": "",
+    "SecretKey": "",
+    "ConnectionString": "DefaultEndpointsProtocol=https;AccountName=mystorageaccount;AccountKey=YOUR_ACCOUNT_KEY;EndpointSuffix=core.windows.net",
+    "CustomEndpoint": ""
+  },
+  "DeleteRemovedFiles": false,
+  "StorageTier": "Cool",
+  "ExcludePatterns": [
+    "*.tmp",
+    "Thumbs.db",
+    ".DS_Store"
+  ],
+  "StateFilePath": ""
+}
