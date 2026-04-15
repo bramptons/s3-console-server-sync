@@ -7,6 +7,26 @@ public class SchedulerServiceTests
     private readonly SchedulerService _sut = new();
 
     [Fact]
+    public void BuildSchtasksArguments_KeepsTaskRunnerCommandIntact_WhenPathsContainSpaces()
+    {
+        var arguments = SchedulerService.BuildSchtasksArguments(
+            "S3ConsoleSync_media-backup",
+            @"C:\Program Files\CloudSync\s3consolesync.exe",
+            @"C:\Program Files\CloudSync\media-backup.json",
+            "DAILY",
+            null,
+            "02:00",
+            null,
+            null);
+
+        Assert.Equal("/tr", arguments[3]);
+        Assert.Equal(
+            @"""C:\Program Files\CloudSync\s3consolesync.exe"" run --config ""C:\Program Files\CloudSync\media-backup.json""",
+            arguments[4]);
+        Assert.DoesNotContain(arguments, argument => argument == "Files\\CloudSync\\media-backup.json");
+    }
+
+    [Fact]
     public void RegisterTask_OnNonWindows_ThrowsPlatformNotSupportedException()
     {
         if (System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(

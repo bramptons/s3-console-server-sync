@@ -47,14 +47,13 @@ public class SchedulerService
                       ?? throw new InvalidOperationException("Cannot determine executable path.");
 
         var taskName = BuildTaskName(configPath);
-        var args = $"run --config \"{configPath}\"";
         var (scheduleType, schedMod, startTime, day) = ParseSchedule(schedule);
 
-        var command = BuildSchtasksCommand(
-            taskName, exePath, args, scheduleType, schedMod, startTime, day, taskUser);
+        var arguments = BuildSchtasksArguments(
+            taskName, exePath, configPath, scheduleType, schedMod, startTime, day, taskUser);
 
         Log.Information("Registering scheduled task '{Task}'  schedule='{Schedule}'", taskName, schedule);
-        RunSchtasks(command);
+        RunSchtasks(arguments);
         Log.Information("Scheduled task '{Task}' registered successfully.", taskName);
     }
 
@@ -64,7 +63,7 @@ public class SchedulerService
         EnsureWindows();
         var taskName = BuildTaskName(configPath);
         Log.Information("Removing scheduled task '{Task}'", taskName);
-        RunSchtasks($"/delete /tn \"{taskName}\" /f");
+        RunSchtasks(["/delete", "/tn", taskName, "/f"]);
         Log.Information("Scheduled task '{Task}' removed.", taskName);
     }
 
@@ -72,7 +71,7 @@ public class SchedulerService
     public void ListTasks()
     {
         EnsureWindows();
-        RunSchtasks($"/query /fo LIST /v /tn \"{TaskNamePrefix}\"");
+        RunSchtasks(["/query", "/fo", "LIST", "/v", "/tn", TaskNamePrefix]);
     }
 
     // ── Private helpers ───────────────────────────────────────────────────────
@@ -84,30 +83,60 @@ public class SchedulerService
         return $"{TaskNamePrefix}{safe}";
     }
 
-    private static string BuildSchtasksCommand(
+    internal static string BuildTaskRunCommand(string exePath, string configPath)
+    {
+        return $"\"{exePath}\" run --config \"{configPath}\"";
+    }
+
+    internal static IReadOnlyList<string> BuildSchtasksArguments(
         string taskName,
         string exePath,
-        string args,
+        string configPath,
         string scheduleType,
         string? schedMod,
         string? startTime,
         string? day,
         string? taskUser)
     {
-        var cmd = $"/create /tn \"{taskName}\" /tr \"\\\"{exePath}\\\" {args}\" /sc {scheduleType} /f";
+        var arguments = new List<string>
+        {
+            "/create",
+            "/tn",
+            taskName,
+            "/tr",
+            BuildTaskRunCommand(exePath, configPath),
+            "/sc",
+            scheduleType,
+            "/f"
+        };
 
         if (!string.IsNullOrEmpty(schedMod))
-            cmd += $" /mo {schedMod}";
-        if (!string.IsNullOrEmpty(startTime))
-            cmd += $" /st {startTime}";
-        if (!string.IsNullOrEmpty(day))
-            cmd += $" /d {day}";
-        if (!string.IsNullOrEmpty(taskUser))
-            cmd += taskUser.Equals("SYSTEM", StringComparison.OrdinalIgnoreCase)
-                ? " /ru SYSTEM"
-                : $" /ru \"{taskUser}\"";
+        {
+            arguments.Add("/mo");
+            arguments.Add(schedMod);
+        }
 
-        return cmd;
+        if (!string.IsNullOrEmpty(startTime))
+        {
+            arguments.Add("/st");
+            arguments.Add(startTime);
+        }
+
+        if (!string.IsNullOrEmpty(day))
+        {
+            arguments.Add("/d");
+            arguments.Add(day);
+        }
+
+        if (!string.IsNullOrEmpty(taskUser))
+        {
+            arguments.Add("/ru");
+            arguments.Add(taskUser.Equals("SYSTEM", StringComparison.OrdinalIgnoreCase)
+                ? "SYSTEM"
+                : taskUser);
+        }
+
+        return arguments;
     }
 
     private static (string type, string? mod, string? startTime, string? day) ParseSchedule(string schedule)
@@ -130,14 +159,17 @@ public class SchedulerService
         };
     }
 
-    private static void RunSchtasks(string arguments)
+    private static void RunSchtasks(IEnumerable<string> arguments)
     {
-        var psi = new ProcessStartInfo("schtasks.exe", arguments)
+        var psi = new ProcessStartInfo("schtasks.exe")
         {
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false
         };
+
+        foreach (var argument in arguments)
+            psi.ArgumentList.Add(argument);
 
         using var process = Process.Start(psi)
                             ?? throw new InvalidOperationException("Failed to start schtasks.exe");

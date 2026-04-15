@@ -2,8 +2,8 @@ using Amazon;
 using Amazon.Runtime;
 using Amazon.S3;
 using Amazon.S3.Model;
-using Amazon.S3.Transfer;
 using S3ConsoleSync.Models;
+using Serilog;
 
 namespace S3ConsoleSync.Services.Providers;
 
@@ -12,6 +12,9 @@ namespace S3ConsoleSync.Services.Providers;
 /// </summary>
 public class AwsS3Provider : IStorageProvider, IDisposable
 {
+    internal const long MultipartUploadThresholdBytes = 8L * 1024 * 1024;
+    internal const long MultipartUploadPartSizeBytes = 8L * 1024 * 1024;
+
     protected readonly IAmazonS3 _client;
 
     public AwsS3Provider(CredentialConfig credentials, string region)
@@ -61,9 +64,20 @@ public class AwsS3Provider : IStorageProvider, IDisposable
         CancellationToken ct = default)
     {
         var storageClass = ResolveStorageClass(storageTier);
+        var fileSize = new FileInfo(localFilePath).Length;
 
-        using var transferUtility = new TransferUtility(_client);
-        var uploadRequest = new TransferUtilityUploadRequest
+        if (fileSize >= MultipartUploadThresholdBytes)
+        {
+            return await UploadMultipartAsync(
+                bucketOrContainer,
+                objectKey,
+                localFilePath,
+                storageClass,
+                fileSize,
+                ct);
+        }
+
+        var uploadRequest = new PutObjectRequest
         {
             BucketName = bucketOrContainer,
             Key = objectKey,
@@ -71,11 +85,8 @@ public class AwsS3Provider : IStorageProvider, IDisposable
             StorageClass = storageClass
         };
 
-        await transferUtility.UploadAsync(uploadRequest, ct);
-
-        // Retrieve the ETag of the uploaded object.
-        var meta = await _client.GetObjectMetadataAsync(bucketOrContainer, objectKey, ct);
-        return meta.ETag ?? string.Empty;
+        var response = await _client.PutObjectAsync(uploadRequest, ct);
+        return response.ETag ?? string.Empty;
     }
 
     public async Task DeleteObjectAsync(
@@ -97,6 +108,85 @@ public class AwsS3Provider : IStorageProvider, IDisposable
             "DEEP_ARCHIVE"         => S3StorageClass.DeepArchive,
             _                      => S3StorageClass.Standard
         };
+
+    private async Task<string> UploadMultipartAsync(
+        string bucketOrContainer,
+        string objectKey,
+        string localFilePath,
+        S3StorageClass storageClass,
+        long fileSize,
+        CancellationToken ct)
+    {
+        var createResponse = await _client.InitiateMultipartUploadAsync(
+            new InitiateMultipartUploadRequest
+            {
+                BucketName = bucketOrContainer,
+                Key = objectKey,
+                StorageClass = storageClass
+            },
+            ct);
+
+        var partETags = new List<PartETag>();
+
+        try
+        {
+            long filePosition = 0;
+            var partNumber = 1;
+
+            while (filePosition < fileSize)
+            {
+                var partSize = Math.Min(MultipartUploadPartSizeBytes, fileSize - filePosition);
+                var uploadResponse = await _client.UploadPartAsync(
+                    new UploadPartRequest
+                    {
+                        BucketName = bucketOrContainer,
+                        Key = objectKey,
+                        UploadId = createResponse.UploadId,
+                        PartNumber = partNumber,
+                        FilePath = localFilePath,
+                        FilePosition = filePosition,
+                        PartSize = partSize
+                    },
+                    ct);
+
+                partETags.Add(new PartETag(partNumber, uploadResponse.ETag));
+                filePosition += partSize;
+                partNumber++;
+            }
+
+            var completeResponse = await _client.CompleteMultipartUploadAsync(
+                new CompleteMultipartUploadRequest
+                {
+                    BucketName = bucketOrContainer,
+                    Key = objectKey,
+                    UploadId = createResponse.UploadId,
+                    PartETags = partETags
+                },
+                ct);
+
+            return completeResponse.ETag ?? string.Empty;
+        }
+        catch
+        {
+            try
+            {
+                await _client.AbortMultipartUploadAsync(
+                    new AbortMultipartUploadRequest
+                    {
+                        BucketName = bucketOrContainer,
+                        Key = objectKey,
+                        UploadId = createResponse.UploadId
+                    },
+                    ct);
+            }
+            catch (Exception abortEx)
+            {
+                Log.Warning(abortEx, "Failed to abort multipart upload for '{Key}'", objectKey);
+            }
+
+            throw;
+        }
+    }
 
     public void Dispose() => _client.Dispose();
 }
