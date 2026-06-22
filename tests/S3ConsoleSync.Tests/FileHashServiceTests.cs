@@ -90,7 +90,7 @@ public class FileHashServiceTests : IDisposable
     }
 
     [Fact]
-    public void HasChanged_ModifiedTimeDiffers_ReturnsTrue()
+    public void HasChanged_ModifiedTimeDiffersSameContent_ReturnsFalse()
     {
         var path = WriteFile("changed_mtime.txt", "same content");
         var info = new FileInfo(path);
@@ -100,6 +100,24 @@ public class FileHashServiceTests : IDisposable
             SizeBytes = info.Length,
             LastModifiedUtc = info.LastWriteTimeUtc.AddHours(-1) // stale timestamp
         };
+
+        Assert.False(_sut.HasChanged(path, state));
+    }
+
+    [Fact]
+    public void HasChanged_SameSizeDifferentContent_ReturnsTrue()
+    {
+        var path = WriteFile("same_size_changed_content.txt", "video-episode-01");
+        var info = new FileInfo(path);
+        var state = new FileState
+        {
+            ContentMd5 = _sut.ComputeMd5(path),
+            SizeBytes = info.Length,
+            LastModifiedUtc = info.LastWriteTimeUtc
+        };
+
+        File.WriteAllText(path, "video-episode-02");
+        File.SetLastWriteTimeUtc(path, state.LastModifiedUtc);
 
         Assert.True(_sut.HasChanged(path, state));
     }

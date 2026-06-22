@@ -20,8 +20,9 @@ public class FileHashService
     }
 
     /// <summary>
-    /// Returns true when the local file differs from the persisted state
-    /// (size, last-modified, or MD5 mismatch).
+    /// Returns true when the local file differs from the persisted state.
+    /// Size is used as a cheap fast-path, then MD5 decides same-sized files so
+    /// metadata-only timestamp changes do not force media files to re-upload.
     /// </summary>
     public virtual bool HasChanged(string filePath, Models.FileState? previous)
     {
@@ -35,10 +36,8 @@ public class FileHashService
         if (info.Length != previous.SizeBytes)
             return true;
 
-        if (info.LastWriteTimeUtc != previous.LastModifiedUtc)
-            return true;
-
-        // Full hash check as a final tie-breaker.
+        // Full hash check decides content equality. Last-modified timestamps
+        // are stored for diagnostics/state, but are not used to force uploads.
         return ComputeMd5(filePath) != previous.ContentMd5;
     }
 }
